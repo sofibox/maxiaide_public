@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.6.1"
+_APP_VERSION="1.6.2"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -20,8 +20,8 @@ function usage() {
     echo "Error, the usage file ${usage_file} does not exist."
     exit 1
   fi
-
 }
+
 function is_script_running() {
   pgrep -lf ".[ /]$1( |\$)"
 }
@@ -30,13 +30,13 @@ function set_linux_crlf() {
   local files retval
   files="$*"
   for file in ${files}; do
-    echo "Checking and converting file [ ${file} ] into unix compatible file ..."
-    dos2unix <"${file}" | cmp - "${file}" 2>&1
+    dos2unix -q <"${file}" | cmp -s - "${file}" 2>&1
     retval=$?
     if [ "${retval}" -ne 0 ]; then
-      dos2unix "${file}"
+      echo -n "[${SCRIPT_NAME}]: Removing carriage return from custom rule file [ ${file} ] ..."
+      dos2unix -q "${file}"
+      get_status_message "$?"
     fi
-    echo ""
   done
 }
 
@@ -52,7 +52,6 @@ function ensure_free_process() {
       exit 1
     fi
   done
-
 }
 
 function get_status_message() {
@@ -70,7 +69,7 @@ function get_status_message() {
 function aide_update_rules() {
   local custom_rule_file="${AIDE_DEFAULT_RULES_PATH}/98_${SCRIPT_NAME}_rules"
   # Use 98_ because 99_ rule is the catchall rule for scanning root /.
-  echo -n "[${SCRIPT_NAME}]: Updating AIDE custom rule in ${AIDE_DEFAULT_RULES_PATH} ..."
+  echo -n "[${SCRIPT_NAME}]: Updating AIDE custom rule in [ ${AIDE_DEFAULT_RULES_PATH} ] ..."
   cp "${AIDE_CUSTOM_RULES}" "${custom_rule_file}"
   get_status_message "$?"
   set_linux_crlf "${AIDE_CUSTOM_RULES}" "${custom_rule_file}"
@@ -79,13 +78,14 @@ function aide_update_rules() {
   if [[ -z "$(tail -c 1 "${custom_rule_file}")" && -s "${custom_rule_file}" ]]; then
     :
   else
+    echo -n "[${SCRIPT_NAME}]: Adding a newline into custom rule file [ ${file} ] ..."
     echo "" >>"${custom_rule_file}"
+    get_status_message "$?"
   fi
 }
 
 function aide_init() {
   local retval
-
   # In case that the default custom config default_custom_aide.conf does not exist,
   # we pull out from the original config file location at /etc/aide/aide.conf and this would be the new default_custom_aide.conf
   # In brief, this will restore missing file default_custom_aide.conf from /etc/aide/aide.conf
@@ -105,7 +105,7 @@ function aide_init() {
   echo -n "[${SCRIPT_NAME}]: Backing up existing AIDE config ${AIDE_CUSTOM_CONF} as ${AIDE_CUSTOM_CONF}.${DATE_TIME_NOW}.backup ..."
   mv "${AIDE_CUSTOM_CONF}" "${AIDE_CUSTOM_CONF}.${DATE_TIME_NOW}.backup"
   get_status_message "$?"
-  echo -n "[${SCRIPT_NAME}]: Copying AIDE default config file from ${AIDE_DEFAULT_CUSTOM_CONF} into ${AIDE_CUSTOM_CONF} ..."
+  echo -n "[${SCRIPT_NAME}]: Copying AIDE default config file from [ ${AIDE_DEFAULT_CUSTOM_CONF} ] into [ ${AIDE_CUSTOM_CONF} ] ..."
   cp "${AIDE_DEFAULT_CUSTOM_CONF}" "${AIDE_CUSTOM_CONF}"
   get_status_message "$?"
   echo -n "[${SCRIPT_NAME}]: Removing AIDE existing database ..."
