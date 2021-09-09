@@ -1,5 +1,9 @@
 Maxi AIDE Documentation
 
+MaxiAIDE is an AIDE wrapper tool to manage AIDE easily
+
+See the original AIDE: https://github.com/aide/aide
+
 Author: Arafat Ali | Email: arafat@sofibox.com | (C) 2019-2021
 
 Usage:
