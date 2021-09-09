@@ -1,0 +1,6 @@
+# Add custom rules here and then,
+# run maxiaide update-rule to update this custom rules into /etc/aide/aide.conf.d/
+# Important note: The ending of this file must contain at least one new empty line
+
+# Example
+# !/root/.bash_history$ f
