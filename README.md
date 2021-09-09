@@ -14,12 +14,15 @@ You can add custom rules in `/conf/custom_rules`:
 
 `maxiaide edit-rule`
 
-To overwrite aide catchall rule add the following line into custom rule on top:
+To overwrite aide scan catchall rule from `/etc/aide/aide.conf.d/*`, add the following line into custom rule on top:
 
-/ MaxiRule
+`/ MaxiRule`
 
-`where MaxiRule is an example of rule that be defined in custom_aide.conf`
+where `/` is the root path to scan
+and `MaxiRule` is an example of rule that must be defined in conf/custom_aide.conf`
 
-then run maxiaide `update-rule` to update the new rule into `/etc/aide/aide.conf.d/*`
+you can add more rules in conf/custom_aide.conf like you normally do in `aide.conf`
 
-See maxiaide --help for more options.
+then run `maxiaide update-rule` to update the new rules into `/etc/aide/aide.conf.d/*`
+
+See `maxiaide --help` for more actions and options.
