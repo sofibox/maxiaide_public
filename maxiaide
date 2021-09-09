@@ -63,7 +63,6 @@ function get_status_message() {
     echo " [FAILED ]"
     exit 1
   fi
-  echo ""
 }
 
 function aide_update_rules() {
