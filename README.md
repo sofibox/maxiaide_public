@@ -19,7 +19,7 @@ To overwrite aide scan catchall rule from `/etc/aide/aide.conf.d/*`, add the fol
 `/ MaxiRule`
 
 where `/` is the root path to scan
-and `MaxiRule` is an example of rule that must be defined in conf/custom_aide.conf`
+and `MaxiRule` is an example of rule that must be defined in `conf/custom_aide.conf`
 
 you can add more rules in `conf/custom_aide.conf` like you normally do in `aide.conf`
 
