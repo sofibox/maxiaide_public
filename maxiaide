@@ -1,13 +1,13 @@
 #!/bin/bash
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.6.3"
+_APP_VERSION="1.6.4"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
 Monitoring Script using AIDE (https://github.com/aide/aide)"
 _APP_VERSION_STATUS="${_APP_VERSION}-${_APP_STATUS}"
-_AUTHOR="Author: Arafat Ali | Email: arafat@sofibox.com | (C) 2019-2021"
+_AUTHOR="Author: Arafat Ali | Email: arafat@sofibox.com | (C) 2019-2022"
 # ====================================================
 
 function usage() {
@@ -40,9 +40,10 @@ function set_linux_crlf() {
   done
 }
 
-# Do not run this script if these processes are running
-# This is useful to prevent maxiaide running, for example a backup script is running
-# TODO: has not been tested but might work 100% - Testing
+# This function is use to filter other processes not run this script if they are running
+# This is useful to prevent maxiaide running when server load is high, for example a full server backup script is running
+# and you should not run AIDE
+# TODO: tested before, test again to confirm no bug
 function ensure_free_process() {
   local dnr_process_names
   dnr_process_names=("maxirsync maxiclam")
@@ -174,7 +175,7 @@ function aide_scan() {
     fi
     echo "-------" | tee -a "${REPORT_FILE}"
   else
-    echo "[${SCRIPT_NAME}]: Using previous database file [${AIDE_DB}] which has last modified date on: $(stat -c '%y' "${AIDE_DB}")"
+    echo "[${SCRIPT_NAME}]: Note: The scan will compare the previous database file [${AIDE_DB}] which has last modified date on: $(stat -c '%y' "${AIDE_DB}")"
   fi
   echo ""
   echo "[${SCRIPT_NAME}]: =~=~=~= SYSTEM DATA CHECK START =~=~=~=" | tee -a "${REPORT_FILE}"
@@ -408,7 +409,8 @@ while [ "$#" -gt 0 ]; do
   -V | --version | version) # Display Program version
     echo "${_APP_INFO}"
     echo ""
-    echo "${_APP_SPECIFIC_NAME}-${_APP_VERSION_STATUS}"
+    echo "Script version: ${_APP_SPECIFIC_NAME}-${_APP_VERSION_STATUS}"
+    echo "AIDE version: ${AIDE_BIN_VERSION}"
     echo "${_AUTHOR}"
     exit 0
     break
