@@ -13,10 +13,10 @@ maxiaide <ACTIONS> <-SHORT_OPTIONS/--LONG_OPTIONS>
 
 OPTIONS:
 
-  -h, --help
-        This help text.
+  -h, --help, /?, ?
+        This is a help text.
 
-  -v, --version
+  -v, -V, --version, version, ver
         Show version information
 
   -t, --test
@@ -28,7 +28,7 @@ ACTIONS:
 
       Run system scan for any file or folder changes based on rule from aide.conf.
       In order to update AIDE database automatically after scanning, use the following options:
-      -a, --db-auto-update
+      -a, --auto-update
 
       OPTIONAL PARAMETER(S):
 
@@ -41,10 +41,10 @@ ACTIONS:
           -d, --debug
           Run the scan in debug mode
 
-          -u, --db-auto-update, --auto-update, --db-update
+          -a, -u, --update, --db-auto-update, --auto-update, --db-update
           Auto update AIDE database after scanning
 
-          -b, --db-auto-backup, --auto-backup, --db-backup
+          -b, --backup, --db-auto-backup, --auto-backup, --db-backup
           Automatically archive or backup existing AIDE database with timestamp after scanning
 
   init
@@ -53,9 +53,13 @@ ACTIONS:
       Note that this action will automatically run another action called update-rule
 
 
-  update-rule
+  update-rule, updaterule
 
       Update custom rule from /conf/custom_rules.
+
+  clearlog, removelog, cleanlog
+
+       Clean old logs except the latest log
 
   edit-rule, edit-rules, editrule
 

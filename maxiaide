@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.6.4"
+_APP_VERSION="1.6.5"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -19,6 +19,16 @@ function usage() {
   else
     echo "Error, the usage file ${usage_file} does not exist."
     exit 1
+  fi
+}
+
+_confirm() {
+  # ask for confirmation
+  read -r -p "$1 [y/n] " response
+  if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    return 0
+  else
+    exit 0
   fi
 }
 
@@ -74,7 +84,8 @@ function aide_update_rules() {
   get_status_message "$?"
   set_linux_crlf "${AIDE_CUSTOM_RULES}" "${custom_rule_file}"
   chmod 644 "${custom_rule_file}"
-  # Fixed this error: AIDE did not put new line in rule file automatically: https://github.com/aide/aide/issues/108
+  # AIDE did not put new line in rule file automatically after edit (user must manually put a new line)
+  # So, below is a workaround for the following issue: https://github.com/aide/aide/issues/108
   if [[ -z "$(tail -c 1 "${custom_rule_file}")" && -s "${custom_rule_file}" ]]; then
     :
   else
@@ -85,7 +96,7 @@ function aide_update_rules() {
 }
 
 function aide_init() {
-  local retval
+  # TODO retest this
   # In case that the default custom config default_custom_aide.conf does not exist,
   # we pull out from the original config file location at /etc/aide/aide.conf and this would be the new default_custom_aide.conf
   # In brief, this will restore missing file default_custom_aide.conf from /etc/aide/aide.conf
@@ -95,23 +106,29 @@ function aide_init() {
     get_status_message "$?"
   fi
 
-  # Restore custom_aide.conf from default_custom_aide.conf
+  # Restore custom_aide.conf from default_custom_aide.conf if file does not exist
   if [ ! -f "${AIDE_CUSTOM_CONF}" ]; then
-    echo -n "[${SCRIPT_NAME}]: Restoring ${AIDE_CUSTOM_CONF} file from ${AIDE_DEFAULT_CUSTOM_CONF} ..."
+    echo -n "[${SCRIPT_NAME}]: Warning, missing file ${AIDE_CUSTOM_CONF}. Restoring AIDE custom config file from ${AIDE_DEFAULT_CUSTOM_CONF} ..."
     cp "${AIDE_DEFAULT_CUSTOM_CONF}" "${AIDE_CUSTOM_CONF}"
     get_status_message "$?"
+  else
+
+    # Do backup AIDE config if file exist
+    echo -n "[${SCRIPT_NAME}]: Backing up existing AIDE custom config ${AIDE_CUSTOM_CONF} as ${AIDE_CUSTOM_CONF}.${DATE_TIME_NOW}.backup ..."
+    mv "${AIDE_CUSTOM_CONF}" "${AIDE_CUSTOM_CONF}.${DATE_TIME_NOW}.backup"
+    get_status_message "$?"
+
+    echo -n "[${SCRIPT_NAME}]: Restoring AIDE default custom config file from [ ${AIDE_DEFAULT_CUSTOM_CONF} ] into [ ${AIDE_CUSTOM_CONF} ] ..."
+    cp "${AIDE_DEFAULT_CUSTOM_CONF}" "${AIDE_CUSTOM_CONF}"
+    get_status_message "$?"
+
   fi
 
-  echo -n "[${SCRIPT_NAME}]: Backing up existing AIDE config ${AIDE_CUSTOM_CONF} as ${AIDE_CUSTOM_CONF}.${DATE_TIME_NOW}.backup ..."
-  mv "${AIDE_CUSTOM_CONF}" "${AIDE_CUSTOM_CONF}.${DATE_TIME_NOW}.backup"
-  get_status_message "$?"
-  echo -n "[${SCRIPT_NAME}]: Copying AIDE default config file from [ ${AIDE_DEFAULT_CUSTOM_CONF} ] into [ ${AIDE_CUSTOM_CONF} ] ..."
-  cp "${AIDE_DEFAULT_CUSTOM_CONF}" "${AIDE_CUSTOM_CONF}"
-  get_status_message "$?"
+  # Remove AIDE existing database
   echo -n "[${SCRIPT_NAME}]: Removing AIDE existing database ..."
   rm -rf "${AIDE_DB}"
   get_status_message "$?"
-  # Fixed workaround for:
+  # Fixed workaround for missing a new line:
   set_linux_crlf "${AIDE_DEFAULT_CUSTOM_CONF} ${AIDE_CUSTOM_CONF}"
   aide_update_rules
 
@@ -179,6 +196,9 @@ function aide_scan() {
   fi
   echo ""
   echo "[${SCRIPT_NAME}]: =~=~=~= SYSTEM DATA CHECK START =~=~=~=" | tee -a "${REPORT_FILE}"
+
+  # Initialize the new report file here
+  cat /dev/null >"${REPORT_FILE}"
 
   if [ "${DB_AUTO_UPDATE}" == "true" ]; then
     echo "[${SCRIPT_NAME}]: Scanning and updating system for data changes ... (this may take some time):" | tee -a "${REPORT_FILE}"
@@ -314,7 +334,7 @@ function aide_scan() {
   echo ""
 
   if [ "${WARN_STATUS}" == "WARNING" ]; then
-    ${MAIL_BIN} -s "[${SCRIPT_NAME} | ${WARN_STATUS} ]: AIDE Scan: ${file_status}" ${ADMIN_EMAIL} <"${REPORT_FILE}"
+    ${MAIL_BIN} -s "[${SCRIPT_NAME} | ${WARN_STATUS} ]: AIDE Scan: ${file_status}" "${ADMIN_EMAIL}" <"${REPORT_FILE}"
   fi
 }
 
@@ -384,7 +404,6 @@ DATE_TIME_NOW="$(date '+%d-%m-%Y_%H-%M-%S')" #31-03-2020_11-56-16
 MONTH_NOW=$(date +%B)
 DATE_NOW="$(date '+%d-%m-%Y')" #31-03-2020
 REPORT_FILE="${LOG_PATH}/${SCRIPT_NAME}-${DATE_TIME_NOW}-report.log"
-cat /dev/null >"${REPORT_FILE}"
 
 # STATUS VARIABLE
 RUN_MODE="N/A"
@@ -402,11 +421,12 @@ fi
 while [ "$#" -gt 0 ]; do
   case "$1" in
   # Display help and usage
-  -h | --help | help)
+  -h | --help | help | /? | ?)
     usage
     exit 0
     ;;
-  -V | --version | version) # Display Program version
+    # Display Program version
+  -v | -V | --version | version | ver)
     echo "${_APP_INFO}"
     echo ""
     echo "Script version: ${_APP_SPECIFIC_NAME}-${_APP_VERSION_STATUS}"
@@ -416,7 +436,7 @@ while [ "$#" -gt 0 ]; do
     break
     ;;
   -t | --test | test)
-    echo "This is a test"
+    # This is a placeholder for test
     exit 0
     break
     ;;
@@ -425,7 +445,7 @@ while [ "$#" -gt 0 ]; do
     exit 0
     break
     ;;
-  update-rule | update-rules)
+  update-rule | update-rules | updaterule)
     aide_update_rules
     exit 0
     break
@@ -435,9 +455,32 @@ while [ "$#" -gt 0 ]; do
     exit 0
     break
     ;;
+  # For editing purpose
+  edit-self | edit-script | edit-code | update-code | show-script | editself | editscript | editcode | updatecode | showscript | edit)
+    nano -c "${SCRIPT_PATH}/${SCRIPT_NAME}"
+    exit 0
+    break
+    ;;
+  latest-log | latest-report | last-report | lastlog | lastreport | latestreport)
+    latest_log=$(find "${LOG_PATH}" -type f -printf "%T@ %p\n" | sort -n | cut -d' ' -f 2- | tail -n 1)
+    echo "Reading the latest log ..."
+    more "${latest_log}"
+    exit 0
+    break
+    ;;
+  clean-logs | cleanlog | clearlog | removelog)
+    # Remove old logs but leave the latest 1 log
+    _confirm "Are you sure you want to remove old logs?"
+    find "${LOG_PATH}" -maxdepth 1 -type f -printf '%T@ %p\0' |
+      sort -z -nrt ' ' -k1,1 |
+      sed -z -e "1,1d" -e 's/[^ ]* //' |
+      xargs -0r rm -f
+    get_status_message $?
+    break
+    ;;
   scan | check)
-    SHORT_OPTS="c,v,d,u,b"
-    LONG_OPTS="cron,cronjob,verbose,debug,db-auto-update,auto-update,db-update,db-auto-backup,auto-backup,db-backup"
+    SHORT_OPTS="c,v,d,a,u,b"
+    LONG_OPTS="cron,cronjob,verbose,debug,update,db-auto-update,auto-update,db-update,backup,db-auto-backup,auto-backup,db-backup"
     OPTIONS=$(getopt -o "${SHORT_OPTS}" --long "${LONG_OPTS}" -n "[${SCRIPT_NAME}]" -- "$@")
     RETVAL=$?
     if [ ${RETVAL} != 0 ]; then
@@ -464,11 +507,11 @@ while [ "$#" -gt 0 ]; do
         DEBUG=true
         shift
         ;;
-      -u | --db-auto-update | --auto-update | --db-update)
+      -a | -u | --update | --db-auto-update | --auto-update | --db-update)
         DB_AUTO_UPDATE=true
         shift
         ;;
-      -b | --db-auto-backup | --auto-backup | --db-backup)
+      -b | --backup | --db-auto-backup | --auto-backup | --db-backup)
         DB_AUTO_BACKUP=true
         shift
         ;;
