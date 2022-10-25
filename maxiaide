@@ -1,7 +1,11 @@
 #!/bin/bash
+# secure the file permission creation
+umask 077
+# make sure variables are defined
+set -u
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.6.5"
+_APP_VERSION="1.6.6"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -10,7 +14,7 @@ _APP_VERSION_STATUS="${_APP_VERSION}-${_APP_STATUS}"
 _AUTHOR="Author: Arafat Ali | Email: arafat@sofibox.com | (C) 2019-2022"
 # ====================================================
 
-function usage() {
+usage() {
   local usage_file
   usage_file="${SCRIPT_PATH}/readme.txt"
   if [ -f "${usage_file}" ]; then
@@ -32,14 +36,15 @@ _confirm() {
   fi
 }
 
-function is_script_running() {
+is_script_running() {
   pgrep -lf ".[ /]$1( |\$)"
 }
 
-function set_linux_crlf() {
+set_linux_crlf() {
   local files retval
   files="$*"
   for file in ${files}; do
+    # shellcheck disable=SC2094
     dos2unix -q <"${file}" | cmp -s - "${file}" 2>&1
     retval=$?
     if [ "${retval}" -ne 0 ]; then
@@ -53,8 +58,7 @@ function set_linux_crlf() {
 # This function is use to filter other processes not run this script if they are running
 # This is useful to prevent maxiaide running when server load is high, for example a full server backup script is running
 # and you should not run AIDE
-# TODO: tested before, test again to confirm no bug
-function ensure_free_process() {
+ensure_free_process() {
   local dnr_process_names
   dnr_process_names=("maxirsync maxiclam")
   for dnr_process_name in "${dnr_process_names[@]}"; do
@@ -65,7 +69,7 @@ function ensure_free_process() {
   done
 }
 
-function get_status_message() {
+get_status_message() {
   local retval
   retval="$1"
   if [[ "${retval}" -eq 0 ]]; then
@@ -76,7 +80,7 @@ function get_status_message() {
   fi
 }
 
-function aide_update_rules() {
+aide_update_rules() {
   local custom_rule_file="${AIDE_DEFAULT_RULES_PATH}/98_${SCRIPT_NAME}_rules"
   # Use 98_ because 99_ rule is the catchall rule for scanning root /.
   echo -n "[${SCRIPT_NAME}]: Updating AIDE custom rule in [ ${AIDE_DEFAULT_RULES_PATH} ] ..."
@@ -95,8 +99,8 @@ function aide_update_rules() {
   fi
 }
 
-function aide_init() {
-  # TODO retest this
+aide_init() {
+  _confirm "This will remove all AIDE databases. Are you sure you want to initialized AIDE?"
   # In case that the default custom config default_custom_aide.conf does not exist,
   # we pull out from the original config file location at /etc/aide/aide.conf and this would be the new default_custom_aide.conf
   # In brief, this will restore missing file default_custom_aide.conf from /etc/aide/aide.conf
@@ -134,7 +138,7 @@ function aide_init() {
 
 }
 
-function aide_scan() {
+aide_scan() {
   local retval added_count removed_count changed_count total_count file_plural file_status
   ensure_free_process
   if [ "${CRONJOB}" == "true" ]; then
@@ -192,13 +196,20 @@ function aide_scan() {
     fi
     echo "-------" | tee -a "${REPORT_FILE}"
   else
-    echo "[${SCRIPT_NAME}]: Note: The scan will compare the previous database file [${AIDE_DB}] which has last modified date on: $(stat -c '%y' "${AIDE_DB}")"
+    echo "[${SCRIPT_NAME}]: Note: The scan will compare the previous database file [${AIDE_DB}] which has last modified date on: $(stat -c '%y' "${AIDE_DB}" | sed -e "s/\\..*//")"
   fi
   echo ""
   echo "[${SCRIPT_NAME}]: =~=~=~= SYSTEM DATA CHECK START =~=~=~=" | tee -a "${REPORT_FILE}"
 
   # Initialize the new report file here
   cat /dev/null >"${REPORT_FILE}"
+
+  # This is required by AIDE to make sure this file exist and has correct permission
+  if ! [ -d /run/aide ]; then
+      mkdir -p /run/aide
+      chown root:root /run/aide
+      chmod 600 /run/aide
+  fi
 
   if [ "${DB_AUTO_UPDATE}" == "true" ]; then
     echo "[${SCRIPT_NAME}]: Scanning and updating system for data changes ... (this may take some time):" | tee -a "${REPORT_FILE}"
@@ -334,7 +345,7 @@ function aide_scan() {
   echo ""
 
   if [ "${WARN_STATUS}" == "WARNING" ]; then
-    ${MAIL_BIN} -s "[${SCRIPT_NAME} | ${WARN_STATUS} ]: AIDE Scan: ${file_status}" "${ADMIN_EMAIL}" <"${REPORT_FILE}"
+    ${MAIL_BIN} -s "[${SCRIPT_NAME} | ${WARN_STATUS} ]: AIDE Scan on ${BOX_HOSTNAME}: ${file_status}" "${ADMIN_EMAIL}" <"${REPORT_FILE}"
   fi
 }
 
@@ -343,7 +354,7 @@ SCRIPT_PATH="$(dirname "$(readlink -f "$0")")"
 SCRIPT_NAME=$(basename -- "$0")
 BOX_HOSTNAME=$(hostname)
 MAIL_BIN=$(command -v mail)
-DATE_BIN=$(command -v date)
+#DATE_BIN=$(command -v date)
 
 BIN_DEPS="aide mail dos2unix nano"
 for BIN_DEP in $BIN_DEPS; do
@@ -401,8 +412,8 @@ AIDE_DB="/var/lib/aide/aide.db"
 
 # REPORT FILES
 DATE_TIME_NOW="$(date '+%d-%m-%Y_%H-%M-%S')" #31-03-2020_11-56-16
-MONTH_NOW=$(date +%B)
-DATE_NOW="$(date '+%d-%m-%Y')" #31-03-2020
+#MONTH_NOW=$(date +%B)
+#DATE_NOW="$(date '+%d-%m-%Y')" #31-03-2020
 REPORT_FILE="${LOG_PATH}/${SCRIPT_NAME}-${DATE_TIME_NOW}-report.log"
 
 # STATUS VARIABLE
