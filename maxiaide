@@ -1,8 +1,6 @@
 #!/bin/bash
 # secure the file permission creation
 umask 077
-# make sure variables are defined
-set -u
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
 _APP_VERSION="1.6.6"
