@@ -24,7 +24,7 @@ OPTIONS:
 
 ACTIONS:
 
-  scan
+  scan, check, compare
 
       Run system scan for any file or folder changes based on rule from aide.conf.
       In order to update AIDE database automatically after scanning, use the following options:
@@ -32,7 +32,7 @@ ACTIONS:
 
       OPTIONAL PARAMETER(S):
 
-          -c,--cronjob
+          -j, --cron, --cronjob
           Run the scan in cronjob mode
 
           -v, --verbose
@@ -47,6 +47,14 @@ ACTIONS:
           -b, --backup, --db-auto-backup, --auto-backup, --db-backup
           Automatically archive or backup existing AIDE database with timestamp after scanning
 
+           -c, -f, -p, -l, --compare, --file, --path, --limit <PATH>
+           Compare specific file or path against current database
+
+           -e, --email
+           Enable email report. Even if this option is enabled, it will only send email if there is one or more
+           warning appear from the scan. Please make sure that the email report format is valid or the script will prompt
+           to correct it
+
   init
 
       Initialize config file and database. This will also backup existing AIDE config file
@@ -60,6 +68,10 @@ ACTIONS:
   clearlog, removelog, cleanlog
 
        Clean old logs except the latest log
+
+  latestlog, lastlog, lastreport
+
+       Read the latest generated report
 
   edit-rule, edit-rules, editrule
 

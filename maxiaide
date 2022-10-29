@@ -3,7 +3,7 @@
 umask 077
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.6.6"
+_APP_VERSION="1.6.7"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -24,6 +24,20 @@ usage() {
   fi
 }
 
+# validate data
+# syntax: if is_valid "email"; then
+is_valid() {
+  local type data1
+  type="$1"
+  data1="$2"
+  if [[ "${type}" == "email" ]]; then
+    if [[ "${data1}" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4}$ ]]; then
+      return 0
+    else
+      return 1
+    fi
+  fi
+}
 _confirm() {
   # ask for confirmation
   read -r -p "$1 [y/n] " response
@@ -49,6 +63,31 @@ set_linux_crlf() {
       echo -n "[${SCRIPT_NAME}]: Removing carriage return from custom rule file [ ${file} ] ..."
       dos2unix -q "${file}"
       get_status_message "$?"
+    fi
+  done
+}
+
+# syntax:
+# check_path "path1" "path2" "path3"
+check_path() {
+  local paths
+  paths="$*"
+  for path in ${paths}; do
+    if [ -f "${path}" ]; then
+      echo "[${SCRIPT_NAME}]: OK, the file path [ ${path} ] exists"
+      return 0
+    elif [ -d "${path}" ]; then
+      echo "[${SCRIPT_NAME}]: OK, the directory path [ ${path} ] exists"
+      return 0
+    elif [ -L "${path}" ]; then
+      echo "[${SCRIPT_NAME}]: OK, the symlink path [ ${path} ] exists"
+      return 0
+    elif [ -S "${path}" ]; then
+      echo "[${SCRIPT_NAME}]: OK, the socket path [ ${path} ] exists"
+      return 0
+    else
+      echo "[${SCRIPT_NAME}]: Error, the path [ ${path} ] does not exist!"
+      exit 1
     fi
   done
 }
@@ -137,7 +176,7 @@ aide_init() {
 }
 
 aide_scan() {
-  local retval added_count removed_count changed_count total_count file_plural file_status
+  local retval added_count removed_count changed_count total_count file_plural file_status log_option db_action limit_option
   ensure_free_process
   if [ "${CRONJOB}" == "true" ]; then
     RUN_MODE="cronjob"
@@ -145,8 +184,35 @@ aide_scan() {
     RUN_MODE="manual"
   fi
 
-  # Check if database exist, if not init and generate new db
+  if [[ "${DEBUG}" == "true" ]]; then
+    log_option="--log-level debug"
+  elif [[ "${VERBOSE}" == "true" ]]; then
+    log_option="--log-level info"
+  else
+    log_option=""
+  fi
 
+  if [[ "${DB_AUTO_UPDATE}" == "true" ]]; then
+    db_action="--update"
+  else
+    db_action="--check"
+  fi
+
+  # If file path is no empty (this means, the --compare option is set), we check the path to compare
+
+  if [ -n "${FILE_PATH}" ]; then
+    check_path "${FILE_PATH}"
+    limit_option="--limit ${FILE_PATH}"$
+  fi
+
+  if [ "${REPORT_EMAIL}" == "false" ]; then
+    echo "[${SCRIPT_NAME}]: Warning, report email is disabled because -e or --email option is not present"
+  elif ! is_valid "email" "${REPORT_EMAIL}"; then
+    echo "[${SCRIPT_NAME}]: Warning, report email [ ${REPORT_EMAIL} ] is invalid, please set the correct email format eg: ADMIN_EMAIL=email@domain.tld"
+    exit 1
+  fi
+
+  # Check if database exist, if not init and generate new db
   if [[ ! -s "${AIDE_CUSTOM_CONF}" ]]; then
     local retval
     echo -n "[${SCRIPT_NAME}]: Notice, config file [${AIDE_CUSTOM_CONF}] does not exist. Copying from ${AIDE_DEFAULT_CUSTOM_CONF} ... "
@@ -196,6 +262,7 @@ aide_scan() {
   else
     echo "[${SCRIPT_NAME}]: Note: The scan will compare the previous database file [${AIDE_DB}] which has last modified date on: $(stat -c '%y' "${AIDE_DB}" | sed -e "s/\\..*//")"
   fi
+
   echo ""
   echo "[${SCRIPT_NAME}]: =~=~=~= SYSTEM DATA CHECK START =~=~=~=" | tee -a "${REPORT_FILE}"
 
@@ -204,30 +271,13 @@ aide_scan() {
 
   # This is required by AIDE to make sure this file exist and has correct permission
   if ! [ -d /run/aide ]; then
-      mkdir -p /run/aide
-      chown root:root /run/aide
-      chmod 600 /run/aide
+    mkdir -p /run/aide
+    chown root:root /run/aide
+    chmod 600 /run/aide
   fi
 
-  if [ "${DB_AUTO_UPDATE}" == "true" ]; then
-    echo "[${SCRIPT_NAME}]: Scanning and updating system for data changes ... (this may take some time):" | tee -a "${REPORT_FILE}"
-    if [[ "${DEBUG}" == "true" ]]; then
-      bash -o pipefail -c "${AIDE_BIN} --log-level debug --update --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
-    elif [ "${VERBOSE}" == "true" ]; then
-      bash -o pipefail -c "${AIDE_BIN} --log-level info --update --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
-    else
-      bash -o pipefail -c "${AIDE_BIN} --update --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
-    fi
-  else
-    echo "[${SCRIPT_NAME}]: Scanning system for data changes ... (this may take some time):" | tee -a "${REPORT_FILE}"
-    if [[ "${DEBUG}" == "true" ]]; then
-      bash -o pipefail -c "${AIDE_BIN} --log-level debug  --check --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
-    elif [ "${VERBOSE}" == "true" ]; then
-      bash -o pipefail -c "${AIDE_BIN} --log-level info --check --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
-    else
-      bash -o pipefail -c "${AIDE_BIN} --check --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
-    fi
-  fi
+  echo "[${SCRIPT_NAME}]: Scanning system for data changes ... (this may take some time):" | tee -a "${REPORT_FILE}"
+  bash -o pipefail -c "${AIDE_BIN} ${log_option} ${db_action} ${limit_option} --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
   retval=$?
   # ((total_entries = added_count = removed_count = changed_count = 0))
   ((added_count = removed_count = changed_count = 0))
@@ -321,7 +371,7 @@ aide_scan() {
       fi
     fi
   else
-    if [ "${WARN_STATUS}" == "WARNING" ]; then
+    if [[ "${WARN_STATUS}" == "WARNING" && "${REPORT_EMAIL}" != "false" ]]; then
       echo "[${SCRIPT_NAME}]: Warning, --db-auto-update is not supplied. To update changes found by AIDE, please supply that option" | tee -a "${REPORT_FILE}"
     fi
   fi
@@ -342,7 +392,7 @@ aide_scan() {
   echo "=============================================" | tee -a "${REPORT_FILE}"
   echo ""
 
-  if [ "${WARN_STATUS}" == "WARNING" ]; then
+  if [[ "${WARN_STATUS}" == "WARNING" ]]; then
     ${MAIL_BIN} -s "[${SCRIPT_NAME} | ${WARN_STATUS} ]: AIDE Scan on ${BOX_HOSTNAME}: ${file_status}" "${ADMIN_EMAIL}" <"${REPORT_FILE}"
   fi
 }
@@ -487,9 +537,9 @@ while [ "$#" -gt 0 ]; do
     get_status_message $?
     break
     ;;
-  scan | check)
-    SHORT_OPTS="c,v,d,a,u,b"
-    LONG_OPTS="cron,cronjob,verbose,debug,update,db-auto-update,auto-update,db-update,backup,db-auto-backup,auto-backup,db-backup"
+  scan | check | compare)
+    SHORT_OPTS="j,v,d,a,u,b,e,c:,f:,p:,l:"
+    LONG_OPTS="cron,cronjob,verbose,debug,update,db-auto-update,auto-update,db-update,backup,db-auto-backup,auto-backup,db-backup,email,compare:,file:,path:,limit:"
     OPTIONS=$(getopt -o "${SHORT_OPTS}" --long "${LONG_OPTS}" -n "[${SCRIPT_NAME}]" -- "$@")
     RETVAL=$?
     if [ ${RETVAL} != 0 ]; then
@@ -502,14 +552,17 @@ while [ "$#" -gt 0 ]; do
     DEBUG=false
     DB_AUTO_UPDATE=false
     DB_AUTO_BACKUP=false
+    REPORT_EMAIL="false"
+    FILE_PATH=""
     while true; do
       case "$1" in
-      -c | --cron | --cronjob)
+      -j | --cron | --cronjob)
         CRONJOB=true
         shift
         ;;
       -v | --verbose)
         VERBOSE=true
+
         shift
         ;;
       -d | --debug)
@@ -524,6 +577,14 @@ while [ "$#" -gt 0 ]; do
         DB_AUTO_BACKUP=true
         shift
         ;;
+      -e | --email)
+        REPORT_EMAIL="${ADMIN_EMAIL}"
+        shift
+        ;;
+      -c | -f | -p | -l | --compare | --file | --path | --limit)
+        FILE_PATH="$2"
+        shift 2
+        ;;
       --)
         shift
         break
@@ -537,8 +598,7 @@ while [ "$#" -gt 0 ]; do
         ;;
       esac
     done
-
-    aide_scan
+    aide_scan "$@"
     break
     ;;
   --)
