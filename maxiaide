@@ -3,7 +3,7 @@
 umask 077
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.6.7"
+_APP_VERSION="1.6.8"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -260,7 +260,7 @@ aide_scan() {
     fi
     echo "-------" | tee -a "${REPORT_FILE}"
   else
-    echo "[${SCRIPT_NAME}]: Note: The scan will compare the previous database file [${AIDE_DB}] which has last modified date on: $(stat -c '%y' "${AIDE_DB}" | sed -e "s/\\..*//")"
+    echo "[${SCRIPT_NAME}]: Note: The scan will compare the previous database file from [${AIDE_DB}] which has last modified date on: $(stat -c '%y' "${AIDE_DB}" | sed -e "s/\\..*//")"
   fi
 
   echo ""
@@ -371,8 +371,8 @@ aide_scan() {
       fi
     fi
   else
-    if [[ "${WARN_STATUS}" == "WARNING" && "${REPORT_EMAIL}" != "false" ]]; then
-      echo "[${SCRIPT_NAME}]: Warning, --db-auto-update is not supplied. To update changes found by AIDE, please supply that option" | tee -a "${REPORT_FILE}"
+    if [[ "${WARN_STATUS}" == "WARNING" ]]; then
+      echo "[${SCRIPT_NAME}]: Warning, the option --db-auto-update is not supplied. To update changes found by AIDE, please supply that option" | tee -a "${REPORT_FILE}"
     fi
   fi
 
@@ -386,14 +386,15 @@ aide_scan() {
   echo "================ SUMMARY ====================" | tee -a "${REPORT_FILE}"
   echo "=============================================" | tee -a "${REPORT_FILE}"
   echo "[${SCRIPT_NAME}]: Running mode: [$RUN_MODE]" | tee -a "${REPORT_FILE}"
-  echo "[${SCRIPT_NAME}]: Scan completed successfully" | tee -a "${REPORT_FILE}"
   echo "[${SCRIPT_NAME}]: Scan status: ${WARN_STATUS} | ${file_status}" | tee -a "${REPORT_FILE}"
   echo "[${SCRIPT_NAME}]: Log file is located at ${REPORT_FILE}" | tee -a "${REPORT_FILE}"
   echo "=============================================" | tee -a "${REPORT_FILE}"
   echo ""
 
-  if [[ "${WARN_STATUS}" == "WARNING" ]]; then
+  if [[ "${WARN_STATUS}" == "WARNING" && "${REPORT_EMAIL}" != "false" ]]; then
+    echo "[${SCRIPT_NAME}]: Sending email report to ${ADMIN_EMAIL} ..."
     ${MAIL_BIN} -s "[${SCRIPT_NAME} | ${WARN_STATUS} ]: AIDE Scan on ${BOX_HOSTNAME}: ${file_status}" "${ADMIN_EMAIL}" <"${REPORT_FILE}"
+    get_status_message "$?"
   fi
 }
 
