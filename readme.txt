@@ -47,7 +47,7 @@ ACTIONS:
           -b, --backup, --db-auto-backup, --auto-backup, --db-backup
           Automatically archive or backup existing AIDE database with timestamp after scanning
 
-           -c, -f, -p, -l, --compare, --file, --path, --limit <PATH>
+           -c, -f, -p, -l, -r, --compare, --file, --path, --limit, --regex <PATH or REGEX>
            Compare specific file or path against current database
 
            -e, --email
@@ -75,4 +75,4 @@ ACTIONS:
 
   edit-rule, edit-rules, editrule
 
-      Automatically open custom rule file and edit them via editor
+      Edit the existing rule file via an editor
