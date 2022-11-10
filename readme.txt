@@ -11,6 +11,11 @@ Usage:
 maxiaide <-SHORT_OPTIONS/--LONG_OPTIONS>
 maxiaide <ACTIONS> <-SHORT_OPTIONS/--LONG_OPTIONS>
 
+example:
+
+maxiaide scan --verbose --update --email --backup or maxiaide scan -vueb
+maxiaide scan --limit /var/www/html/mywebapps.com --email or maxiaide scan -el /var/www/html/mywebapps.com
+
 OPTIONS:
 
   -h, --help, /?, ?
@@ -41,19 +46,24 @@ ACTIONS:
           -d, --debug
           Run the scan in debug mode
 
+          --log-level <LOG_LEVEL>
+          Run the scan as in <LOG_LEVEL> mode, where LOG_LEVEL can be one of the following levels:
+          error, warning, notice, info, rule, config, debug, trace
+          Note that when this option is present, it will ignore both -v and -d options
+
           -a, -u, --update, --db-auto-update, --auto-update, --db-update
           Auto update AIDE database after scanning
 
           -b, --backup, --db-auto-backup, --auto-backup, --db-backup
           Automatically archive or backup existing AIDE database with timestamp after scanning
 
-           -f, -p, -l, -r, --file, --path, --limit, --regex <PATH or REGEX>
-           Compare or limit specific file, path or use regex comparison against current database
+          -f, -p, -l, -r, --file, --path, --limit, --regex <PATH or REGEX>
+          Compare or limit specific file, path or use regex comparison against current database
 
-           -e, --email
-           Enable email report. Even if this option is enabled, it will not send email if there is no warning appear
-           from the scan. Please make sure that the email report format is valid or the script will prompt
-           to correct it
+          -e, --email
+          Enable email report. Even if this option is present, it will not send email if there is no warning appear
+          from the scan. Please make sure that the email report format is valid or the script will prompt to correct it
+
 
   init
 
