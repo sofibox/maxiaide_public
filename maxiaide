@@ -3,7 +3,7 @@
 umask 077
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.6.8"
+_APP_VERSION="1.6.9"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -134,11 +134,10 @@ get_status_message() {
   fi
 }
 aide_update_rules() {
-  echo -n "[${SCRIPT_NAME}]: Copying AIDE custom rule from ${TEMP_CUSTOM_RULES} into [ ${AIDE_DEFAULT_RULES_PATH} ] ..."
+  echo -n "[${SCRIPT_NAME}]: Copying AIDE custom rule from ${TEMP_CUSTOM_RULES} into [ ${MAXIAIDE_CUSTOM_RULES} ] ..."
   cp "${TEMP_CUSTOM_RULES}" "${MAXIAIDE_CUSTOM_RULES}"
   get_status_message "$?"
-}
-aide_check_rules() {
+
   # convert all files into linux end line
   set_linux_crlf "${TEMP_CUSTOM_RULES}" "${MAXIAIDE_CUSTOM_RULES}" "${AIDE_DEFAULT_CUSTOM_CONF}"
   chmod 644 "${MAXIAIDE_CUSTOM_RULES}"
@@ -151,6 +150,9 @@ aide_check_rules() {
     echo "" >>"${MAXIAIDE_CUSTOM_RULES}"
     get_status_message "$?"
   fi
+}
+aide_check_configs() {
+
   # We check all the config files (including custom and built-in rules)
   echo -n "[${SCRIPT_NAME}]: Verifying AIDE config files ..."
   ${AIDE_BIN} --config-check --config="${AIDE_CUSTOM_CONF}"
@@ -202,7 +204,7 @@ aide_init() {
   get_status_message "$?"
 
   aide_update_rules
-  aide_check_rules
+  aide_check_configs
 
 }
 
@@ -215,7 +217,17 @@ aide_scan() {
     RUN_MODE="manual"
   fi
 
-  if [[ "${DEBUG}" == "true" ]]; then
+  # If file path is not empty (this means, the --limit option is set),
+  # we check the path or regex to compare and we set the AIDE --limit <REGEX_STRING>
+  # REGEX_STRING can be dir, path, regex ...
+  if [ -n "${REGEX_STRING}" ]; then
+    # check_path "${REGEX_STRING}"
+    limit_option="--limit ${REGEX_STRING}"
+  fi
+
+  if [[ -n "${LOG_LEVEL}" ]]; then
+    log_option="--log-level ${LOG_LEVEL}"
+  elif [[ "${DEBUG}" == "true" ]]; then
     log_option="--log-level debug"
   elif [[ "${VERBOSE}" == "true" ]]; then
     log_option="--log-level info"
@@ -226,22 +238,15 @@ aide_scan() {
   if [[ "${DB_AUTO_UPDATE}" == "true" ]]; then
     db_action="--update"
   else
+    echo "[${SCRIPT_NAME}]: Notice, the scan will only check for data changes without updating existing database because -u or --update option is not present!"
     db_action="--check"
-  fi
-
-  # If file path is no empty (this means, the --compare option is set),
-  # we check the path to compare and we set the AIDE --limit <FILE_PATH>
-  # FILE_PATH can be dir, path, regex ...
-  if [ -n "${FILE_PATH}" ]; then
-    check_path "${FILE_PATH}"
-    limit_option="--limit ${FILE_PATH}"
   fi
 
   # If email option is not set or has invalid format, we give warning
   if [ "${REPORT_EMAIL}" == "false" ]; then
-    echo "[${SCRIPT_NAME}]: Warning, report email is disabled because -e or --email option is not present"
+    echo "[${SCRIPT_NAME}]: Notice, report email is disabled because -e or --email option is not present!"
   elif ! is_valid "email" "${REPORT_EMAIL}"; then
-    echo "[${SCRIPT_NAME}]: Warning, report email [ ${REPORT_EMAIL} ] is invalid, please set the correct email format eg: ADMIN_EMAIL=email@domain.tld"
+    echo "[${SCRIPT_NAME}]: Notice, report email [ ${REPORT_EMAIL} ] is invalid, please set the correct email format eg: ADMIN_EMAIL=email@domain.tld"
     exit 1
   fi
 
@@ -252,24 +257,23 @@ aide_scan() {
     cp -p "${AIDE_DEFAULT_CUSTOM_CONF}" "${AIDE_CUSTOM_CONF}"
     get_status_message "$?"
   else
-    #echo "AIDE_CUSTOM_CONF exist, so that is a good!"
+    #echo "AIDE_CUSTOM_CONF exist, so that is good!"
     :
   fi
-  echo ""
 
   # Check if database exist, if it does not exist then we initialize a new database
   if [[ ! -f "${AIDE_DB}" ]]; then
     local test_aide_init retval
     echo "[${SCRIPT_NAME}]: Notice, database file [${AIDE_DB}] does not exist!"
-    echo "[${SCRIPT_NAME}]: Initializing new database ... (this may take sometime)"
+    echo "[${SCRIPT_NAME}]: Initializing a new database ... (this may take sometime)"
     echo ""
     test_aide_init=$(${AIDE_INIT_BIN} -y -c "${AIDE_CUSTOM_CONF}" 2>&1)
     retval=$?
     has_error=$(echo "${test_aide_init}" | grep -E "  ERROR: ")
-    # Check if the initialization is success, then we copy a new database into the main database
+    # Check if the initialization is success, then we copy the new database into the main database
     if [ -z "${has_error}" ]; then
       echo "[${SCRIPT_NAME}]: OK, database initialized successfully" | tee -a "${REPORT_FILE}"
-      # Rename the init database (make a copy don't delete init db for audit purpose)
+      # Rename the initialized database (make a copy don't delete init db for audit purpose)
       echo -n "[${SCRIPT_NAME}]: Copying initialized database [${AIDE_DB_NEW}] as [${AIDE_DB}] ..."
       cp -f "${AIDE_DB_NEW}" "${AIDE_DB}" | tee -a "${REPORT_FILE}"
       get_status_message "$?"
@@ -295,15 +299,11 @@ aide_scan() {
       exit 1
     fi
     echo "-------" | tee -a "${REPORT_FILE}"
+    compare_scan=false
   else
-    echo "[${SCRIPT_NAME}]: Note: The scan will compare the previous database file from [${AIDE_DB}] which has last modified date on: $(stat -c '%y' "${AIDE_DB}" | sed -e "s/\\..*//")"
+    compare_scan=true
+
   fi
-
-  echo ""
-  echo "[${SCRIPT_NAME}]: =~=~=~= SYSTEM DATA CHECK START =~=~=~=" | tee -a "${REPORT_FILE}"
-
-  # Initialize the new report file here
-  cat /dev/null >"${REPORT_FILE}"
 
   # This is required by AIDE to make sure this file exist and has correct permission
   if ! [ -d /run/aide ]; then
@@ -312,8 +312,16 @@ aide_scan() {
     chmod 600 /run/aide
   fi
 
+  # Initialize the new report file here
+  cat /dev/null >"${REPORT_FILE}"
+
+  echo ""
+
+  echo "[${SCRIPT_NAME}]: =~=~=~==~=~=~= SYSTEM DATA CHECK START =~=~=~==~=~=~=" | tee -a "${REPORT_FILE}"
   # We start the scan here
-  echo "[${SCRIPT_NAME}]: Scanning system for data changes ... (this may take some time):" | tee -a "${REPORT_FILE}"
+  echo ""
+  [[ "${compare_scan}" == "false" ]] && echo "[${SCRIPT_NAME}]: Scanning system for data changes for the first time... (this may take some time): " | tee -a "${REPORT_FILE}"
+  [[ "${compare_scan}" == "true" ]] && echo "[${SCRIPT_NAME}]: Scanning and comparing database file from [${AIDE_DB}] - $(stat -c '%y' "${AIDE_DB}" | sed -e "s/\\..*//") ..." | tee -a "${REPORT_FILE}"
   bash -o pipefail -c "${AIDE_BIN} ${log_option} ${db_action} ${limit_option} --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
   retval=$?
   # ((total_entries = added_count = removed_count = changed_count = 0))
@@ -329,7 +337,8 @@ aide_scan() {
   else
     file_plural="item"
   fi
-
+  echo "---------------------------------------------------"
+  echo "[${SCRIPT_NAME}]: AIDE has finished checking" | tee -a "${REPORT_FILE}"
   if [ "${retval}" = 0 ]; then
     echo "[${SCRIPT_NAME}]: Ok, no changes detected" | tee -a "${REPORT_FILE}"
     file_status="No changes detected"
@@ -386,7 +395,6 @@ aide_scan() {
     echo "[${SCRIPT_NAME}]: Error, unknown return code: [${retval}]" | tee -a "${REPORT_FILE}"
     exit 1
   fi
-
   if [ "${DB_AUTO_UPDATE}" == "true" ]; then
     if [[ ! -f ${AIDE_DB_NEW} ]]; then
       # In case if suddenly the DB file is not found
@@ -409,14 +417,12 @@ aide_scan() {
     fi
   else
     if [[ "${WARN_STATUS}" == "WARNING" ]]; then
-      echo "[${SCRIPT_NAME}]: Warning, the option --db-auto-update is not supplied. To update changes found by AIDE, please supply that option" | tee -a "${REPORT_FILE}"
+      echo "[${SCRIPT_NAME}]: Notice, to update changes found by AIDE above, please use -u or --update command" | tee -a "${REPORT_FILE}"
     fi
   fi
 
-  echo ""
-  echo "[${SCRIPT_NAME}]: AIDE has finished checking" | tee -a "${REPORT_FILE}"
   echo "" | tee -a "${REPORT_FILE}"
-  echo "[${SCRIPT_NAME}]: =~=~=~= SYSTEM DATA CHECK END  =~=~=~=" | tee -a "${REPORT_FILE}"
+  echo "[${SCRIPT_NAME}]: =~=~=~==~=~=~= SYSTEM DATA CHECK END  =~=~=~==~=~=~=" | tee -a "${REPORT_FILE}"
   echo "" | tee -a "${REPORT_FILE}"
 
   echo "=============================================" | tee -a "${REPORT_FILE}"
@@ -548,26 +554,33 @@ while [ "$#" -gt 0 ]; do
     ;;
   update-rule | update-rules | updaterule)
     aide_update_rules
-    aide_check_rules
+    aide_check_configs
     exit 0
     break
     ;;
   edit-rule | edit-rules | editrule)
     nano -c "${TEMP_CUSTOM_RULES}"
     if cmp --silent -- "${TEMP_CUSTOM_RULES}" "${MAXIAIDE_CUSTOM_RULES}"; then
-      echo "[${SCRIPT_NAME}]: [Skipped] The custom rules are identical to the existing"
+      :
+      # echo "[${SCRIPT_NAME}]: [Skipped] The custom rules are identical to the existing"
     else
       _confirm "[${SCRIPT_NAME}]: The custom rule file has changed. Do you want to update this rule file?" y
       aide_update_rules
-      aide_check_rules
+      aide_check_configs
     fi
 
     exit 0
     break
     ;;
-  # For editing purpose
+  # For self script editing purpose
   edit-self | edit-script | edit-code | update-code | show-script | editself | editscript | editcode | updatecode | showscript | edit)
     nano -c "${SCRIPT_PATH}/${SCRIPT_NAME}"
+    exit 0
+    break
+    ;;
+  edit-conf | edit-config | editconf | editconfig)
+    nano -c "${AIDE_CUSTOM_CONF}"
+    aide_check_configs
     exit 0
     break
     ;;
@@ -590,7 +603,7 @@ while [ "$#" -gt 0 ]; do
     ;;
   scan | check | compare)
     SHORT_OPTS="j,v,d,a,u,b,e,c:,f:,p:,l:,r:"
-    LONG_OPTS="cron,cronjob,verbose,debug,update,db-auto-update,auto-update,db-update,backup,db-auto-backup,auto-backup,db-backup,email,compare:,file:,path:,limit:,regex:"
+    LONG_OPTS="cron,cronjob,verbose,debug,update,db-auto-update,auto-update,db-update,backup,db-auto-backup,auto-backup,db-backup,email,compare:,file:,path:,limit:,regex:,log-level:"
     OPTIONS=$(getopt -o "${SHORT_OPTS}" --long "${LONG_OPTS}" -n "[${SCRIPT_NAME}]" -- "$@")
     RETVAL=$?
     if [ ${RETVAL} != 0 ]; then
@@ -604,7 +617,8 @@ while [ "$#" -gt 0 ]; do
     DB_AUTO_UPDATE=false
     DB_AUTO_BACKUP=false
     REPORT_EMAIL="false"
-    FILE_PATH=""
+    REGEX_STRING=""
+    LOG_LEVEL=""
     while true; do
       case "$1" in
       -j | --cron | --cronjob)
@@ -632,8 +646,12 @@ while [ "$#" -gt 0 ]; do
         REPORT_EMAIL="${ADMIN_EMAIL}"
         shift
         ;;
-      -c | -f | -p | -l | -r | --compare | --file | --path | --limit | --regex)
-        FILE_PATH="$2"
+      -f | -p | -l | -r | --file | --path | --limit | --regex)
+        REGEX_STRING="$2"
+        shift 2
+        ;;
+      --log-level)
+        LOG_LEVEL="$2"
         shift 2
         ;;
       --)
