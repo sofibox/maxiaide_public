@@ -319,7 +319,7 @@ aide_scan() {
 
   echo "[${SCRIPT_NAME}]: =~=~=~==~=~=~= SYSTEM DATA CHECK START =~=~=~==~=~=~=" | tee -a "${REPORT_FILE}"
   # We start the scan here
-  echo ""
+  echo "" | tee -a "${REPORT_FILE}"
   [[ "${compare_scan}" == "false" ]] && echo "[${SCRIPT_NAME}]: Scanning system for data changes for the first time... (this may take some time): " | tee -a "${REPORT_FILE}"
   [[ "${compare_scan}" == "true" ]] && echo "[${SCRIPT_NAME}]: Scanning and comparing database file from [${AIDE_DB}] - $(stat -c '%y' "${AIDE_DB}" | sed -e "s/\\..*//") ..." | tee -a "${REPORT_FILE}"
   bash -o pipefail -c "${AIDE_BIN} ${log_option} ${db_action} ${limit_option} --config=${AIDE_CUSTOM_CONF} | tee -a ${REPORT_FILE}"
@@ -425,14 +425,13 @@ aide_scan() {
   echo "[${SCRIPT_NAME}]: =~=~=~==~=~=~= SYSTEM DATA CHECK END  =~=~=~==~=~=~=" | tee -a "${REPORT_FILE}"
   echo "" | tee -a "${REPORT_FILE}"
 
-  echo "=============================================" | tee -a "${REPORT_FILE}"
+  echo "==============================================" | tee -a "${REPORT_FILE}"
   echo "================ SUMMARY ====================" | tee -a "${REPORT_FILE}"
-  echo "=============================================" | tee -a "${REPORT_FILE}"
   echo "[${SCRIPT_NAME}]: Running mode: [$RUN_MODE]" | tee -a "${REPORT_FILE}"
   echo "[${SCRIPT_NAME}]: Scan status: ${WARN_STATUS} | ${file_status}" | tee -a "${REPORT_FILE}"
-  echo "[${SCRIPT_NAME}]: Log file is located at ${REPORT_FILE}" | tee -a "${REPORT_FILE}"
+  echo "[${SCRIPT_NAME}]: Log file is located at: ${REPORT_FILE}" | tee -a "${REPORT_FILE}"
   echo "[${SCRIPT_NAME}]: To view the last log, run: ${SCRIPT_NAME} lastlog" | tee -a "${REPORT_FILE}"
-  echo "=============================================" | tee -a "${REPORT_FILE}"
+  echo "==============================================" | tee -a "${REPORT_FILE}"
   echo ""
 
   if [[ "${WARN_STATUS}" == "WARNING" && "${REPORT_EMAIL}" != "false" ]]; then
