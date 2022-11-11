@@ -449,6 +449,7 @@ MAIL_BIN=$(command -v mail)
 #DATE_BIN=$(command -v date)
 
 # cmp needs diffutils package
+# mail requires mailx or mailutils
 BIN_DEPS="aide mail dos2unix nano cmp"
 for BIN_DEP in $BIN_DEPS; do
   which "${BIN_DEP}" >/dev/null ||
@@ -466,7 +467,7 @@ AIDE_BIN=$(command -v aide)
 # Check compatibility
 AIDE_BIN_VERSION="$(${AIDE_BIN} --version | head -n1 | awk '{ print $2 }')"
 # Any AIDE version tested to be working perfectly, put as array here.
-COMPATIBLE_VERSIONS=("0.17.3")
+COMPATIBLE_VERSIONS=("0.17.3" "0.17.4")
 
 FOUND_COMPATIBLE=$(echo "${COMPATIBLE_VERSIONS[@]}" | grep "${AIDE_BIN_VERSION}")
 
@@ -476,8 +477,8 @@ else
   echo "[${SCRIPT_NAME}]: Warning, this script was designed to run on the following AIDE versions:"
   COMPATIBLE_VERSIONS_FORMAT=$(printf ",%s" "${COMPATIBLE_VERSIONS[@]}")
   echo "${COMPATIBLE_VERSIONS_FORMAT:1}"
-  echo "[${SCRIPT_NAME}]: Your AIDE version if ${AIDE_BIN_VERSION}"
-  echo "[${SCRIPT_NAME}]: It might work 100% but just to be sure to update ${SCRIPT_NAME} into latest version"
+  echo "[${SCRIPT_NAME}]: Your AIDE version is ${AIDE_BIN_VERSION}"
+  echo "[${SCRIPT_NAME}]: It might work 100% but just to be sure to update ${SCRIPT_NAME} script into latest version"
 fi
 
 # For debian distribution, if we install aide we will get this aideinit
