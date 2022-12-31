@@ -3,7 +3,7 @@
 umask 077
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.6.9"
+_APP_VERSION="1.7.0"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -23,6 +23,91 @@ usage() {
     exit 1
   fi
 }
+
+
+# This function is used to check if given package is installed and install the package if it is not installed
+# It will not do anything if the required package exist
+# Usage: required_packages [package(s)]
+# Example: required_packages curl wget git
+required_packages() {
+
+  local required_cmds="$*" detect_by missing_count install_success install_failed retval
+
+  ((missing_count = install_success = install_failed = 0))
+
+  # Loop through the received arguments. Do not quote the array, we want split elements:
+  for required_cmd in ${required_cmds[*]}; do
+
+    # Using command to obtain installation status
+    command -v "${required_cmd}" >/dev/null
+    cmd_status="$?"
+
+    [[ "${cmd_status}" -eq 1 ]] && detect_by="cmd_status"
+
+    if [[ "${cmd_status}" -eq 1 ]]; then
+      ((missing_count++))
+      echo ""
+      echo "[${SCRIPT_NAME}]: Warning, missing ${required_cmd} component detected by ${detect_by}"
+      # This prevents error if we never run apt-get update when the apt cache is expired
+      # When the first missing package is triggered, then we display warning message,
+      # and for this first time, we trigger update command to refresh the expired apt cache
+      if [ "${missing_count}" -eq 1 ]; then
+        echo ""
+        echo "[${SCRIPT_NAME}]: Running apt-get update for the first time ..."
+        apt-get -qq -y update
+        echo ""
+      fi
+      echo "[${SCRIPT_NAME}]: Installing the $(to_ordinal "${missing_count}") missing component: ${required_cmd} ..."
+      echo ""
+
+      if [ "${required_cmd}" == "mail" ]; then
+        _confirm "Do you want to install mailutils?"
+        apt-get -y install mailutils
+        retval=$?
+      elif [ "${required_cmd}" == "ipcalc" ]; then
+        _confirm "Do you want to install ipcalc and its components?"
+        echo "[${SCRIPT_NAME}]: Installing required packages to build ipcalc"
+        sudo apt-get -y install git gcc meson
+        echo "[${SCRIPT_NAME}]: Removing existing ipcalc ..."
+        apt-get -y remove ipcalc
+        rm -rf "/usr/local/bin/ipcalc"
+        rm -rf "/opt/ipcalc"
+        echo ""
+        mkdir -p /opt/ipcalc
+        echo "[${SCRIPT_NAME}]: Installing ipcalc from source https://github.com/sofibox/ipcalc.git ..."
+        git clone https://github.com/sofibox/ipcalc.git "/opt/ipcalc"
+        navigate_to "/opt/ipcalc"
+        meson setup build --buildtype=release
+        ninja -C build
+        echo ""
+        ln -s /opt/ipcalc/build/ipcalc /usr/local/bin
+        ipcalc --version
+        retval=$?
+      elif [ "${required_cmd}" == "packagecommand3" ]; then
+        # Do another type of installation method for this package command name example install from source
+        :
+      else
+        # Do apt installation
+        apt-get -y install "${required_cmd}"
+        retval=$?
+      fi
+
+      if [[ "${retval}" -eq 0 ]]; then
+        ((install_success++))
+      else
+        ((install_failed++))
+      fi
+    fi
+  done
+  if [ "${install_failed}" -gt 0 ]; then
+    echo ""
+    echo "Total missing component: ${missing_count}"
+    echo "Total success installed: ${install_success}"
+    echo "Total failed installed: ${install_failed}"
+    echo ""
+  fi
+}
+
 
 # validate data
 # syntax: if is_valid "email"; then
@@ -450,16 +535,8 @@ MAIL_BIN=$(command -v mail)
 
 # cmp needs diffutils package
 # mail requires mailx or mailutils
-BIN_DEPS="aide mail dos2unix nano cmp"
-for BIN_DEP in $BIN_DEPS; do
-  which "${BIN_DEP}" >/dev/null ||
-    NOT_FOUND="${BIN_DEP} ${NOT_FOUND}"
-done
 
-if [ -n "${NOT_FOUND}" ]; then
-  echo -e "Error: Required program could not be found: ${NOT_FOUND}"
-  exit 1
-fi
+required_packages "aide" "mail" "dos2unix" "nano" "cmp"
 
 # ================================================
 # Since we know that aide and aideinit has been installed we must put this here:
