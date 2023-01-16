@@ -3,7 +3,7 @@
 umask 077
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.7.0"
+_APP_VERSION="1.7.1"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -24,90 +24,31 @@ usage() {
   fi
 }
 
+get_distro() {
+  local arg distro_id distro_version distro_codename
+  arg="$1"
+  if [ -e /etc/os-release ]; then
+    distro_id=$(awk -F= '$1 == "ID" {print $2}' /etc/os-release | LC_ALL=C tr '[:upper:]' '[:lower:]' | tr -d "\"")
+    distro_version=$(awk -F= '$1 == "VERSION_ID" {print $2}' /etc/os-release | tr -d "\"")
+    distro_codename=$(awk -F= '$1 == "VERSION_CODENAME" {print $2}' /etc/os-release | tr -d "\"")
 
-# This function is used to check if given package is installed and install the package if it is not installed
-# It will not do anything if the required package exist
-# Usage: required_packages [package(s)]
-# Example: required_packages curl wget git
-required_packages() {
-
-  local required_cmds="$*" detect_by missing_count install_success install_failed retval
-
-  ((missing_count = install_success = install_failed = 0))
-
-  # Loop through the received arguments. Do not quote the array, we want split elements:
-  for required_cmd in ${required_cmds[*]}; do
-
-    # Using command to obtain installation status
-    command -v "${required_cmd}" >/dev/null
-    cmd_status="$?"
-
-    [[ "${cmd_status}" -eq 1 ]] && detect_by="cmd_status"
-
-    if [[ "${cmd_status}" -eq 1 ]]; then
-      ((missing_count++))
-      echo ""
-      echo "[${SCRIPT_NAME}]: Warning, missing ${required_cmd} component detected by ${detect_by}"
-      # This prevents error if we never run apt-get update when the apt cache is expired
-      # When the first missing package is triggered, then we display warning message,
-      # and for this first time, we trigger update command to refresh the expired apt cache
-      if [ "${missing_count}" -eq 1 ]; then
-        echo ""
-        echo "[${SCRIPT_NAME}]: Running apt-get update for the first time ..."
-        apt-get -qq -y update
-        echo ""
-      fi
-      echo "[${SCRIPT_NAME}]: Installing the $(to_ordinal "${missing_count}") missing component: ${required_cmd} ..."
-      echo ""
-
-      if [ "${required_cmd}" == "mail" ]; then
-        _confirm "Do you want to install mailutils?"
-        apt-get -y install mailutils
-        retval=$?
-      elif [ "${required_cmd}" == "ipcalc" ]; then
-        _confirm "Do you want to install ipcalc and its components?"
-        echo "[${SCRIPT_NAME}]: Installing required packages to build ipcalc"
-        sudo apt-get -y install git gcc meson
-        echo "[${SCRIPT_NAME}]: Removing existing ipcalc ..."
-        apt-get -y remove ipcalc
-        rm -rf "/usr/local/bin/ipcalc"
-        rm -rf "/opt/ipcalc"
-        echo ""
-        mkdir -p /opt/ipcalc
-        echo "[${SCRIPT_NAME}]: Installing ipcalc from source https://github.com/sofibox/ipcalc.git ..."
-        git clone https://github.com/sofibox/ipcalc.git "/opt/ipcalc"
-        navigate_to "/opt/ipcalc"
-        meson setup build --buildtype=release
-        ninja -C build
-        echo ""
-        ln -s /opt/ipcalc/build/ipcalc /usr/local/bin
-        ipcalc --version
-        retval=$?
-      elif [ "${required_cmd}" == "packagecommand3" ]; then
-        # Do another type of installation method for this package command name example install from source
-        :
-      else
-        # Do apt installation
-        apt-get -y install "${required_cmd}"
-        retval=$?
-      fi
-
-      if [[ "${retval}" -eq 0 ]]; then
-        ((install_success++))
-      else
-        ((install_failed++))
-      fi
-    fi
-  done
-  if [ "${install_failed}" -gt 0 ]; then
-    echo ""
-    echo "Total missing component: ${missing_count}"
-    echo "Total success installed: ${install_success}"
-    echo "Total failed installed: ${install_failed}"
-    echo ""
+  elif type lsb_release >/dev/null 2>&1; then
+    distro_id=$(lsb_release -si | LC_ALL=C tr '[:upper:]' '[:lower:]')
+    distro_version=$(lsb_release -sr)
+    distro_codename=$(lsb_release -sc)
+  else
+    distro_id=$(uname -s)
+    distro_version=$(uname -r)
+    distro_codename=""
+  fi
+  if [ "${arg}" == "id" ]; then
+    echo "${distro_id}"
+  elif [ "${arg}" == "version" ]; then
+    echo "${distro_version}"
+  elif [ "${arg}" == "codename" ]; then
+    echo "${distro_codename}"
   fi
 }
-
 
 # validate data
 # syntax: if is_valid "email"; then
@@ -152,21 +93,6 @@ _confirm() {
 
 is_script_running() {
   pgrep -lf ".[ /]$1( |\$)"
-}
-
-set_linux_crlf() {
-  local files retval
-  files="$*"
-  for file in ${files}; do
-    # shellcheck disable=SC2094
-    dos2unix -q <"${file}" | cmp -s - "${file}" 2>&1
-    retval=$?
-    if [ "${retval}" -ne 0 ]; then
-      echo -n "[${SCRIPT_NAME}]: Removing carriage return from custom rule file [ ${file} ] ..."
-      dos2unix -q "${file}"
-      get_status_message "$?"
-    fi
-  done
 }
 
 # syntax:
@@ -222,16 +148,24 @@ aide_update_rules() {
   echo -n "[${SCRIPT_NAME}]: Copying AIDE custom rule from ${TEMP_CUSTOM_RULES} into [ ${MAXIAIDE_CUSTOM_RULES} ] ..."
   cp "${TEMP_CUSTOM_RULES}" "${MAXIAIDE_CUSTOM_RULES}"
   get_status_message "$?"
+  # Remove carriage return for the above files
+  echo -n "[${SCRIPT_NAME}]: Removing carriage return from [ ${TEMP_CUSTOM_RULES} ] ..."
+  sed -i 's/\r//g' "${TEMP_CUSTOM_RULES}"
+  get_status_message "$?"
+  echo -n "[${SCRIPT_NAME}]: Removing carriage return from [ ${MAXIAIDE_CUSTOM_RULES} ] ..."
+  sed -i 's/\r//g' "${MAXIAIDE_CUSTOM_RULES}"
+  get_status_message "$?"
+  echo -n "[${SCRIPT_NAME}]: Removing carriage return from [ ${AIDE_DEFAULT_CUSTOM_CONF} ] ..."
+  sed -i 's/\r//g' "${AIDE_DEFAULT_CUSTOM_CONF}"
+  get_status_message "$?"
 
-  # convert all files into linux end line
-  set_linux_crlf "${TEMP_CUSTOM_RULES}" "${MAXIAIDE_CUSTOM_RULES}" "${AIDE_DEFAULT_CUSTOM_CONF}"
   chmod 644 "${MAXIAIDE_CUSTOM_RULES}"
   # AIDE did not put new line in rule file automatically after edit (user must manually put a new line)
   # So, below is a workaround for the following issue: https://github.com/aide/aide/issues/108
   if [[ -z "$(tail -c 1 "${MAXIAIDE_CUSTOM_RULES}")" && -s "${MAXIAIDE_CUSTOM_RULES}" ]]; then
     :
   else
-    echo -n "[${SCRIPT_NAME}]: Adding a newline into custom rule file [ ${file} ] ..."
+    echo -n "[${SCRIPT_NAME}]: Adding a newline into custom rule file [ ${MAXIAIDE_CUSTOM_RULES} ] ..."
     echo "" >>"${MAXIAIDE_CUSTOM_RULES}"
     get_status_message "$?"
   fi
@@ -533,10 +467,31 @@ BOX_HOSTNAME=$(hostname)
 MAIL_BIN=$(command -v mail)
 #DATE_BIN=$(command -v date)
 
-# cmp needs diffutils package
-# mail requires mailx or mailutils
+# Make sure curl is installed
+if [ -z "$(command -v curl)" ]; then
+  echo "Error, curl is not installed. Installing curl ..."
 
-required_packages "aide" "mail" "dos2unix" "nano" "cmp"
+fi
+
+# Check if maxibuild is installed
+if ! command -v maxibuild >/dev/null 2>&1; then
+  echo "Error, maxibuild is not installed. Checking for curl ..."
+  # Check if curl is installed
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "Installing curl ..."
+    if [[ "$(get_distro id)" == +(debian|ubuntu) ]]; then
+      apt-get -y install curl
+    elif [[ "$(get_distro id)" == +(centos|fedora|rhel|almalinux|rocklylinux) ]]; then
+      dnf -y install curl
+    fi
+    get_status_message "$?"
+  fi
+  echo "Installing maxibuild ..."
+  curl -s https://raw.githubusercontent.com/sofibox/maxibuild/master/install.sh | bash
+fi
+
+# diffutils is required for using cmp command
+maxibuild --include "aide mail nano diffutils"
 
 # ================================================
 # Since we know that aide and aideinit has been installed we must put this here:
