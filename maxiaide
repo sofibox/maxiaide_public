@@ -3,7 +3,7 @@
 umask 077
 # ==================================================
 _APP_SPECIFIC_NAME="Maxiaide"
-_APP_VERSION="1.7.1"
+_APP_VERSION="1.7.2"
 _APP_STATUS="beta"
 _APP_INFO="${_APP_SPECIFIC_NAME} is a bash script CLI extension to manage
 AIDE with extra features. Check file integrity aka File
@@ -499,7 +499,7 @@ AIDE_BIN=$(command -v aide)
 # Check compatibility
 AIDE_BIN_VERSION="$(${AIDE_BIN} --version | head -n1 | awk '{ print $2 }')"
 # Any AIDE version tested to be working perfectly, put as array here.
-COMPATIBLE_VERSIONS=("0.17.3" "0.17.4")
+COMPATIBLE_VERSIONS=("0.17.3" "0.17.4" "0.18.3")
 
 FOUND_COMPATIBLE=$(echo "${COMPATIBLE_VERSIONS[@]}" | grep "${AIDE_BIN_VERSION}")
 
